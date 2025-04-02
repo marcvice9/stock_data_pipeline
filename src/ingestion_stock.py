@@ -1,6 +1,4 @@
 import requests
-import pandas as pd
-import time
 from dotenv import load_dotenv
 import os
 
@@ -10,20 +8,24 @@ load_dotenv()
 
 # Get the API key from the environment variable
 API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY")
+BASE_URL = os.getenv("ALPHA_VANTAGE_BASE_URL")
+
 if not API_KEY:
     raise ValueError("API key not found. Please make sure to set the ALPHA_VANTAGE_API_KEY in your .env file.")
-
-# Define your tickers
-tickers = ['AAPL', 'GOOGL', 'MSFT']
-
-# Base URL for the Alpha Vantage API (daily time series data)
-base_url = 'https://www.alphavantage.co/query'
-
-# List to collect data for all tickers
-all_tickers = []
+if not BASE_URL:
+    raise ValueError("BASE_URL not found. Please make sure to set the ALPHA_VANTAGE_BASE_URL in your .env file.")
 
 # Function to fetch stock data for a specific ticker
 def fetch_stock_data(ticker):
+    """
+    Fetches daily stock data for a specific ticker from the Alpha Vantage API.
+
+    Args:
+        ticker (str): The stock ticker symbol.
+
+    Returns:
+        list: A list of dictionaries containing stock data for each day.
+    """
 
     # Define the parameters for the API request
     params = {
@@ -33,7 +35,7 @@ def fetch_stock_data(ticker):
         'outputsize': 'compact' # 'compact' returns 100 data points (last 100 days)
     }
 
-    response = requests.get(base_url, params=params)
+    response = requests.get(BASE_URL, params=params)
     
     if response.status_code == 200:
         data = response.json()
@@ -54,35 +56,14 @@ def fetch_stock_data(ticker):
                     "Volume": int(stats['5. volume'])
                 }
                 records.append(record)
-            all_tickers.extend(records)  # Collect data for all tickers
+            
             print(f"Data for {ticker} fetched successfully.")
+            return records
 
         else:
             print("No time series data found.")
+            return []
 
     else:
         print(f"Error fetching data: {response.status_code}")
-
-for ticker in tickers:
-    print(f"Fetching data for {ticker}...")
-    fetch_stock_data(ticker)
-    time.sleep(12)  # Sleep for 12 seconds to avoid hitting the API rate limit
-
-if all_tickers:
-      
-    df = pd.DataFrame(all_tickers)
-
-    # Convert 'Date' to datetime format
-    df['Date'] = pd.to_datetime(df['Date'])
-
-    # Set 'Date' as the index
-    df.set_index('Date', inplace=True)
-
-    # Display all columns in the DataFrame
-    pd.set_option('display.max_columns', None)
-    
-    # Print the resulting DataFrame
-    print(df)
-
-else:
-    print("No data to display.")
+        return []
