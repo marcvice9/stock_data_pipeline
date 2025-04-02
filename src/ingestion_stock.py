@@ -1,5 +1,7 @@
 import requests
 from dotenv import load_dotenv
+from src.config.constants import TICKERS
+import time
 import os
 
 
@@ -67,3 +69,16 @@ def fetch_stock_data(ticker):
     else:
         print(f"Error fetching data: {response.status_code}")
         return []
+
+if __name__ == "__main__":
+    
+    all_tickers = []
+
+    for ticker in TICKERS:
+        print(f"Fetching data for {ticker}...")
+        records=fetch_stock_data(ticker)
+        all_tickers.extend(records)  # Collect data for all tickers
+        time.sleep(12)  # Sleep for 12 seconds to avoid hitting the API rate limit
+    
+    print(all_tickers)
+
