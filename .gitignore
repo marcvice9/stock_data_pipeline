@@ -3,3 +3,4 @@
 .env
 dockerextension.yml
 src/db/orm_models.py
+__pycache__/
