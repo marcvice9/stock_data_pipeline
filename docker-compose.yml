@@ -29,3 +29,17 @@ services:
       - postgres
     networks:
       - stock_network
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: stock_market_app
+    restart: always
+    depends_on:
+      - postgres
+    networks:
+      - stock_network
+    env_file:
+      - .env
+    volumes:
+    - .:/app 
