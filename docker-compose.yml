@@ -37,9 +37,9 @@ services:
     restart: always
     depends_on:
       - postgres
-    networks:
-      - stock_network
     env_file:
       - .env
     volumes:
-    - .:/app 
+      - .:/app
+    networks:
+      - stock_network
