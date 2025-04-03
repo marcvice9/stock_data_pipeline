@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect
 from sqlalchemy.exc import OperationalError
 import time
 import os
@@ -58,7 +58,54 @@ def insert_raw_data(db_engine, raw_df, table_name='raw_data'):
     except Exception as e:
         print(f"Error inserting raw data: {e}")
     
+def insert_raw_data_with_cdc(db_engine, raw_df, table_name='raw_data'):
+    """
+    Insert raw data into a temporary staging table and merge it into the main table.
 
+    db_engine: SQLAlchemy engine object
+    raw_df: Pandas DataFrame containing raw stock data
+    table_name: Name of the main database table
+    """
+    staging_table_name = f"staging_{table_name}"
+
+    try:
+        with db_engine.connect() as conn:
+            # Step 1: Check if the main table exists
+            inspector = inspect(db_engine)
+            if table_name not in inspector.get_table_names():
+                print(f"Table '{table_name}' does not exist. Creating it...")
+                raw_df.head(0).to_sql(table_name, conn, if_exists='replace', index=True)  # Create the table schema
+                print(f"Table '{table_name}' created successfully.")
+
+            # Step 2: Create the staging table
+            print(f"Creating staging table: {staging_table_name}")
+            raw_df.to_sql(staging_table_name, conn, if_exists='replace', index=True)
+            print(f"Data inserted into staging table: {staging_table_name}")
+
+            # Step 3: Merge data from the staging table into the main table
+            print(f"Merging data into main table: {table_name}")
+            merge_query = f"""
+            INSERT INTO {table_name} (Date, Ticker, Open, High, Low, Close, Volume)
+            SELECT Date, Ticker, Open, High, Low, Close, Volume
+            FROM {staging_table_name}
+            ON CONFLICT (Date, Ticker) DO UPDATE
+            SET
+                Open = EXCLUDED.Open,
+                High = EXCLUDED.High,
+                Low = EXCLUDED.Low,
+                Close = EXCLUDED.Close,
+                Volume = EXCLUDED.Volume;
+            """
+            conn.execute(merge_query)
+            print(f"Data merged into main table: {table_name}")
+
+            # Step 4: Drop the staging table
+            print(f"Dropping staging table: {staging_table_name}")
+            conn.execute(f"DROP TABLE IF EXISTS {staging_table_name}")
+            print(f"Staging table dropped: {staging_table_name}")
+
+    except Exception as e:
+        print(f"Error during CDC operation: {e}")
 
 
 if __name__ == "__main__":
