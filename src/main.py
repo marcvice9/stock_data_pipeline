@@ -1,5 +1,5 @@
 from src.ingestion_stock import fetch_stock_data
-from src.db.db_operations import create_db_engine, init_db, insert_raw_data
+from src.db.db_operations import create_db_engine, init_db, insert_raw_data, insert_raw_data_with_cdc
 from src.config.constants import TICKERS
 import pandas as pd
 import time
@@ -36,7 +36,7 @@ def main():
     # Initialize the database and create tables
     try:
         db_engine = init_db()
-        insert_raw_data(db_engine, df, table_name='raw_stock')
+        insert_raw_data_with_cdc(db_engine, df, table_name='raw_data')
     except Exception as e:
         print("Database connection failed. Data not inserted.")
 
