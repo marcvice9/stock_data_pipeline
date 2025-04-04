@@ -21,8 +21,8 @@ def main():
         # Convert 'Date' to datetime format
         df['Date'] = pd.to_datetime(df['Date'])
 
-        # Set 'Date' as the index
-        df.set_index('Date', inplace=True)
+        # Add current_timestamp column
+        df['curr_timestamp'] = pd.Timestamp.now()
 
         # Display all columns in the DataFrame
         pd.set_option('display.max_columns', None)
