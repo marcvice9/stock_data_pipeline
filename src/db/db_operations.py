@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.exc import OperationalError
 import time
 import os
@@ -74,35 +74,53 @@ def insert_raw_data_with_cdc(db_engine, raw_df, table_name='raw_data'):
             inspector = inspect(db_engine)
             if table_name not in inspector.get_table_names():
                 print(f"Table '{table_name}' does not exist. Creating it...")
-                raw_df.head(0).to_sql(table_name, conn, if_exists='replace', index=True)  # Create the table schema
+                raw_df.columns = raw_df.columns.str.lower() 
+                raw_df.to_sql(table_name, conn, if_exists='replace', index=False)  # Create the table schema
                 print(f"Table '{table_name}' created successfully.")
+                # Create the unique constraint / primary key to allow for CDC
+                pk_query = (f"""
+                ALTER TABLE {table_name}
+                ADD CONSTRAINT unique_date_ticker UNIQUE (date, ticker);
+                """)
+                conn.execute(text(pk_query))
+                print(f"Unique constraint added to main table: {table_name}")
 
-            # Step 2: Create the staging table
-            print(f"Creating staging table: {staging_table_name}")
-            raw_df.to_sql(staging_table_name, conn, if_exists='replace', index=True)
-            print(f"Data inserted into staging table: {staging_table_name}")
+            else:
+                # Step 2: As main _table already exists, create the staging table
+                print(f"Creating staging table: {staging_table_name}")
+                raw_df.columns = raw_df.columns.str.lower() # Ensure column names are lowercase
+                raw_df.to_sql(staging_table_name, conn, if_exists='replace', index=False)
+                print(f"Data inserted into staging table: {staging_table_name}")
+                
 
-            # Step 3: Merge data from the staging table into the main table
-            print(f"Merging data into main table: {table_name}")
-            merge_query = f"""
-            INSERT INTO {table_name} (Date, Ticker, Open, High, Low, Close, Volume)
-            SELECT Date, Ticker, Open, High, Low, Close, Volume
-            FROM {staging_table_name}
-            ON CONFLICT (Date, Ticker) DO UPDATE
-            SET
-                Open = EXCLUDED.Open,
-                High = EXCLUDED.High,
-                Low = EXCLUDED.Low,
-                Close = EXCLUDED.Close,
-                Volume = EXCLUDED.Volume;
-            """
-            conn.execute(merge_query)
-            print(f"Data merged into main table: {table_name}")
+                # Step 3: Merge data from the staging table into the main table
+                print(f"Merging data into main table: {table_name}")
+                merge_query = text(f"""
+                INSERT INTO {table_name} (date, ticker, open, high, low, close, volume, curr_timestamp)
+                SELECT date, ticker, open, high, low, close, volume, curr_timestamp
+                FROM {staging_table_name}
+                ON CONFLICT (date, ticker) DO UPDATE
+                SET
+                    open = EXCLUDED.open,
+                    high = EXCLUDED.high,
+                    low = EXCLUDED.low,
+                    close = EXCLUDED.close,
+                    volume = EXCLUDED.volume,
+                    curr_timestamp = EXCLUDED.curr_timestamp
+                WHERE
+                    {table_name}.open <> EXCLUDED.open OR
+                    {table_name}.high <> EXCLUDED.high OR
+                    {table_name}.low <> EXCLUDED.low OR
+                    {table_name}.close <> EXCLUDED.close OR
+                    {table_name}.volume <> EXCLUDED.volume;
+                """)
+                conn.execute(merge_query)
+                print(f"Data merged into main table: {table_name}")
 
-            # Step 4: Drop the staging table
-            print(f"Dropping staging table: {staging_table_name}")
-            conn.execute(f"DROP TABLE IF EXISTS {staging_table_name}")
-            print(f"Staging table dropped: {staging_table_name}")
+                # Step 4: Drop the staging table
+                # print(f"Dropping staging table: {staging_table_name}")
+                # conn.execute(text(f"DROP TABLE IF EXISTS {staging_table_name}"))
+                # print(f"Staging table dropped: {staging_table_name}")
 
     except Exception as e:
         print(f"Error during CDC operation: {e}")
