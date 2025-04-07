@@ -32,6 +32,10 @@ def start_scheduler():
 
     print(f"Scheduler started. Running every {schedule_interval} {schedule_unit}.")
 
+    # Run the task immediately on startup
+    print("Running the task immediately on startup...")
+    fetch_and_process_data(debug=True)
+
     # Keep the script running to execute scheduled jobs
     while True:
         schedule.run_pending()
