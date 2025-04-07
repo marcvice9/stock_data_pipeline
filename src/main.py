@@ -57,7 +57,6 @@ def fetch_and_process_data(debug=False):
         all_tickers = []
 
         for ticker in TICKERS:
-            logging.info(f"Fetching data for {ticker}...")
             records=fetch_stock_data(ticker)
             all_tickers.extend(records)  # Collect data for all tickers
             time.sleep(12)  # Sleep for 12 seconds to avoid hitting the API rate limit
