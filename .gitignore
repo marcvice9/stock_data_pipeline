@@ -1,6 +1,5 @@
 # Ignore virtual environment and environment variables
 .venv
 .env
-dockerextension.yml
-src/db/orm_models.py
 __pycache__/
+stock_data.csv
