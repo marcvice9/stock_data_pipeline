@@ -52,38 +52,39 @@ def fetch_stock_data(ticker):
         'outputsize': 'compact' # 'compact' returns 100 data points (last 100 days)
     }
 
-    response = requests.get(BASE_URL, params=params)
-    
-    if response.status_code == 200:
-        data = response.json()
+    try:
+        response = requests.get(BASE_URL, params=params)
+        
+        if response.status_code == 200:
+            data = response.json()
 
-        # Parse the data to get the daily time series
-        time_series = data.get('Time Series (Daily)', {})
-        if time_series:
+            # Parse the data to get the daily time series
+            time_series = data.get('Time Series (Daily)', {})
+            if time_series:
+                
+                records = []
+                for date, stats in time_series.items():
+                    record = {
+                        "Date": date,
+                        "Ticker": str(ticker),
+                        "Open": float(stats['1. open']),
+                        "High": float(stats['2. high']),
+                        "Low": float(stats['3. low']),
+                        "Close": float(stats['4. close']),
+                        "Volume": int(stats['5. volume'])
+                    }
+                    records.append(record)
+                
+                logging.info(f"Data for {ticker} fetched successfully.")
+                return records
             
-            records = []
-            for date, stats in time_series.items():
-                record = {
-                    "Date": date,
-                    "Ticker": str(ticker),
-                    "Open": float(stats['1. open']),
-                    "High": float(stats['2. high']),
-                    "Low": float(stats['3. low']),
-                    "Close": float(stats['4. close']),
-                    "Volume": int(stats['5. volume'])
-                }
-                records.append(record)
-            
-            logging.info(f"Data for {ticker} fetched successfully.")
-            return records
+            else:
+                logging.warning(f"No time series data found for ticker: {ticker}.")
+                return []
 
-        else:
-            logging.warning(f"No time series data found for ticker: {ticker}.")
-            return []
-
-    else:
-        logging.error(f"Error fetching data: {response.status_code}")
-        return []
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Error fetching data for ticker {ticker}: {e}")
+        raise Exception(f"Error fetching data for ticker {ticker}: {e}")
 
 if __name__ == "__main__":
     
