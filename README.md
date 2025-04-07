@@ -58,7 +58,7 @@ Ensure PostgreSQL is running locally.
 
 Create a database using the credentials specified in the .env file:
 ```bash
-psql -U postgres -c "CREATE DATABASE stock_pipeline;"
+psql -U postgres -c "CREATE DATABASE postgres;"
 ```
 
 ## How to Trigger the Data Pipeline Manually
@@ -135,3 +135,9 @@ GET https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=AAPL&api
 - The pipeline is configured to fetch data for the tickers specified in constants.py.
 - Ensure the API key and database credentials are correctly set in the .env file before running the pipeline.
 - Logs for each component are stored in separate log files (e.g., main.log, scheduler.log, ingestion_stock.log, db_operations.log).
+
+## Improvements
+- Implementation of API Rate daily limit warning / counter
+- Implementation of API full output in batches
+- Optimize API call for concurrent calls
+- Switch from CDC to SCD to enable time travel analysis of changes in stock prices

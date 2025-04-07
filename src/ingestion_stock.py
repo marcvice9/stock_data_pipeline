@@ -54,33 +54,42 @@ def fetch_stock_data(ticker):
 
     try:
         response = requests.get(BASE_URL, params=params)
-        
-        if response.status_code == 200:
-            data = response.json()
+        response.raise_for_status()  # Raise an excpeption for HTTP errors
 
-            # Parse the data to get the daily time series
-            time_series = data.get('Time Series (Daily)', {})
-            if time_series:
-                
-                records = []
-                for date, stats in time_series.items():
-                    record = {
-                        "Date": date,
-                        "Ticker": str(ticker),
-                        "Open": float(stats['1. open']),
-                        "High": float(stats['2. high']),
-                        "Low": float(stats['3. low']),
-                        "Close": float(stats['4. close']),
-                        "Volume": int(stats['5. volume'])
-                    }
-                    records.append(record)
-                
-                logging.info(f"Data for {ticker} fetched successfully.")
-                return records
+        data = response.json()
+
+        # Parse the data to get the daily time series
+        time_series = data.get('Time Series (Daily)', {})
+
+        if time_series:
             
-            else:
-                logging.warning(f"No time series data found for ticker: {ticker}.")
-                return []
+            records = []
+            for date, stats in time_series.items():
+                record = {
+                    "Date": date,
+                    "Ticker": str(ticker),
+                    "Open": float(stats['1. open']),
+                    "High": float(stats['2. high']),
+                    "Low": float(stats['3. low']),
+                    "Close": float(stats['4. close']),
+                    "Volume": int(stats['5. volume'])
+                }
+                records.append(record)
+            
+            logging.info(f"Data for {ticker} fetched successfully.")
+            return records
+        
+        else:
+            logging.warning(f"No time series data found for ticker: {ticker}.")
+            return []
+
+    except requests.exceptions.HTTPError as e:
+        logging.error(f"HTTP error for ticker {ticker}: {e}")
+        return []
+
+    except requests.exceptions.JSONDecodeError as e:
+        logging.error(f"JSON decode error for ticker {ticker}: {e}")
+        return []
 
     except requests.exceptions.RequestException as e:
         logging.error(f"Error fetching data for ticker {ticker}: {e}")
