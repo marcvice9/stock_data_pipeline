@@ -58,7 +58,8 @@ def fetch_and_process_data(debug=False):
 
             # Convert 'Date' to datetime format &  Add current_timestamp column
             df['Date'] = pd.to_datetime(df['Date'])
-            df['curr_timestamp'] = pd.Timestamp.now()
+            df['curr_timestamp'] = pd.Timestamp.now().to_datetime64()
+            df['curr_timestamp'] = df['curr_timestamp'].astype('datetime64[ns]')  # Explicitly cast to datetime64[ns]
 
             # Display all columns in the DataFrame
             pd.set_option('display.max_columns', None)
