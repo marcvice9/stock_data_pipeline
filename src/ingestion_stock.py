@@ -3,18 +3,31 @@ from dotenv import load_dotenv
 from src.config.constants import TICKERS
 import time
 import os
+import logging
 
 
 # Load environment variables from .env file
 load_dotenv()
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,  # Set the logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+    format="%(asctime)s - %(levelname)s - %(message)s",  # Log format
+    handlers=[
+        logging.StreamHandler(),  # Log to console
+        logging.FileHandler("ingestion_stock.log", mode="a")  # Log to a file
+    ]
+)
 
 # Get the API key from the environment variable
 API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY")
 BASE_URL = os.getenv("ALPHA_VANTAGE_BASE_URL")
 
 if not API_KEY:
+    logging.error("API key not found. Please make sure to set the ALPHA_VANTAGE_API_KEY in your .env file.")
     raise ValueError("API key not found. Please make sure to set the ALPHA_VANTAGE_API_KEY in your .env file.")
 if not BASE_URL:
+    logging.error("BASE_URL not found. Please make sure to set the ALPHA_VANTAGE_BASE_URL in your .env file.")
     raise ValueError("BASE_URL not found. Please make sure to set the ALPHA_VANTAGE_BASE_URL in your .env file.")
 
 # Function to fetch stock data for a specific ticker
@@ -28,6 +41,8 @@ def fetch_stock_data(ticker):
     Returns:
         list: A list of dictionaries containing stock data for each day.
     """
+
+    logging.info(f"Fetching data for ticker: {ticker}")
 
     # Define the parameters for the API request
     params = {
@@ -59,15 +74,15 @@ def fetch_stock_data(ticker):
                 }
                 records.append(record)
             
-            print(f"Data for {ticker} fetched successfully.")
+            logging.info(f"Data for {ticker} fetched successfully.")
             return records
 
         else:
-            print("No time series data found.")
+            logging.warning(f"No time series data found for ticker: {ticker}.")
             return []
 
     else:
-        print(f"Error fetching data: {response.status_code}")
+        logging.error(f"Error fetching data: {response.status_code}")
         return []
 
 if __name__ == "__main__":
@@ -75,10 +90,9 @@ if __name__ == "__main__":
     all_tickers = []
 
     for ticker in TICKERS:
-        print(f"Fetching data for {ticker}...")
+        logging.info(f"Fetching data for {ticker}...")
         records=fetch_stock_data(ticker)
         all_tickers.extend(records)  # Collect data for all tickers
         time.sleep(12)  # Sleep for 12 seconds to avoid hitting the API rate limit
     
-    print(all_tickers)
-
+    logging.info(f"Data fetching completed. Total records fetched: {len(all_tickers)}")
