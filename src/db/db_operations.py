@@ -2,10 +2,21 @@ from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.exc import OperationalError
 import time
 import os
+import logging
 from dotenv import load_dotenv
 
 # Load environment variables (if needed for your database configuration)
 load_dotenv()
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,  # Set the logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+    format="%(asctime)s - %(levelname)s - %(message)s",  # Log format
+    handlers=[
+        logging.StreamHandler(),  # Log to console
+        logging.FileHandler("db_operations.log", mode="a")  # Log to a file
+    ]
+)
 
 # Database connection string
 DB_USER = os.getenv("DB_USER", "postgres")
@@ -33,15 +44,15 @@ def init_db(max_retries=5, retry_interval=5):
         try:
             # Test the connection to ensure the database is reachable
             with db_engine.connect() as conn:
-                print("Successfully connected to the database.")
+                logging.info("Successfully connected to the database.")
             return db_engine  # Return the engine, not the connection
         except OperationalError as e:
             attempt += 1
-            print(f"Database connection failed (attempt {attempt}/{max_retries}): {e}")
+            logging.warning(f"Database connection failed (attempt {attempt}/{max_retries}): {e}")
             if attempt < max_retries:
                 time.sleep(retry_interval)
             else:
-                print("Max retry attempts reached. Could not establish connection.")
+                logging.error("Max retry attempts reached. Could not establish connection.")
                 raise Exception("Failed to connect to the database after multiple retries.")
 
 def insert_raw_data(db_engine, raw_df, table_name='raw_data'):
@@ -54,9 +65,9 @@ def insert_raw_data(db_engine, raw_df, table_name='raw_data'):
     try:
         with db_engine.connect() as conn:  # Create a fresh connection
             raw_df.to_sql(table_name, db_engine, if_exists='replace', index=True)
-            print("Raw data successfully inserted!")
+            logging.info("Raw data successfully inserted!")
     except Exception as e:
-        print(f"Error inserting raw data: {e}")
+        logging.error(f"Error inserting raw data: {e}")
     
 def insert_raw_data_with_cdc(db_engine, raw_df, table_name='raw_data'):
     """
@@ -73,28 +84,28 @@ def insert_raw_data_with_cdc(db_engine, raw_df, table_name='raw_data'):
             # Step 1: Check if the main table exists
             inspector = inspect(db_engine)
             if table_name not in inspector.get_table_names():
-                print(f"Table '{table_name}' does not exist. Creating it...")
+                logging.info(f"Table '{table_name}' does not exist. Creating it...")
                 raw_df.columns = raw_df.columns.str.lower() 
                 raw_df.to_sql(table_name, conn, if_exists='replace', index=False)  # Create the table schema
-                print(f"Table '{table_name}' created successfully.")
+                logging.info(f"Table '{table_name}' created successfully.")
                 # Create the unique constraint / primary key to allow for CDC
                 pk_query = (f"""
                 ALTER TABLE {table_name}
                 ADD CONSTRAINT unique_date_ticker UNIQUE (date, ticker);
                 """)
                 conn.execute(text(pk_query))
-                print(f"Unique constraint added to main table: {table_name}")
+                logging.info(f"Unique constraint added to main table: {table_name}")
 
             else:
                 # Step 2: As main _table already exists, create the staging table
-                print(f"Creating staging table: {staging_table_name}")
+                logging.info(f"Creating staging table: {staging_table_name}")
                 raw_df.columns = raw_df.columns.str.lower() # Ensure column names are lowercase
                 raw_df.to_sql(staging_table_name, conn, if_exists='replace', index=False)
-                print(f"Data inserted into staging table: {staging_table_name}")
+                logging.info(f"Data inserted into staging table: {staging_table_name}")
                 
 
                 # Step 3: Merge data from the staging table into the main table
-                print(f"Merging data into main table: {table_name}")
+                logging.info(f"Merging data into main table: {table_name}")
                 merge_query = text(f"""
                 INSERT INTO {table_name} (date, ticker, open, high, low, close, volume, curr_timestamp)
                 SELECT date, ticker, open, high, low, close, volume, curr_timestamp
@@ -116,15 +127,15 @@ def insert_raw_data_with_cdc(db_engine, raw_df, table_name='raw_data'):
                 """)
                 conn.execute(merge_query)
                 conn.commit()
-                print(f"Data merged into main table: {table_name}")
+                logging.info(f"Data merged into main table: {table_name}")
 
                 # Step 4: Drop the staging table
-                # print(f"Dropping staging table: {staging_table_name}")
-                # conn.execute(text(f"DROP TABLE IF EXISTS {staging_table_name}"))
-                # print(f"Staging table dropped: {staging_table_name}")
+                logging.info(f"Dropping staging table: {staging_table_name}")
+                conn.execute(text(f"DROP TABLE IF EXISTS {staging_table_name}"))
+                logging.info(f"Staging table dropped: {staging_table_name}")
 
     except Exception as e:
-        print(f"Error during CDC operation: {e}")
+        logging.error(f"Error during CDC operation: {e}")
 
 def aggregate_stock_data(db_engine, table_name='agg_stock_data'):
     """
@@ -140,15 +151,15 @@ def aggregate_stock_data(db_engine, table_name='agg_stock_data'):
     try:
         with db_engine.connect() as conn:
             # Drop the existing table if it exists
-            print(f"Checking if table '{table_name}' exists...")
+            logging.info(f"Checking if table '{table_name}' exists...")
             inspector = inspect(db_engine)
             if table_name in inspector.get_table_names():
-                print(f"Table '{table_name}' exists. Dropping it...")
+                logging.info(f"Table '{table_name}' exists. Dropping it...")
                 conn.execute(text(f"DROP TABLE IF EXISTS {table_name}"))
-                print(f"Table '{table_name}' has been dropped.")
+                logging.info(f"Table '{table_name}' has been dropped.")
 
             # Recreate the table with recalculated metrics
-            print(f"Recreating table '{table_name}' with recalculated metrics...")
+            logging.info(f"Recreating table '{table_name}' with recalculated metrics...")
             agg_query_str = f"""
                 CREATE TABLE {table_name} AS
                 WITH with_returns AS (
@@ -183,10 +194,10 @@ def aggregate_stock_data(db_engine, table_name='agg_stock_data'):
             """
             conn.execute(text(agg_query_str))
             conn.commit()
-            print(f"Table '{table_name}' has been recreated successfully with recalculated metrics.")
+            logging.info(f"Table '{table_name}' has been recreated successfully with recalculated metrics.")
 
     except Exception as e:
-        print(f"Error during aggregation: {e}")
+        logging.error(f"Error during aggregation: {e}")
 
 
 if __name__ == "__main__":
@@ -194,4 +205,4 @@ if __name__ == "__main__":
         db_engine = init_db()
         aggregate_stock_data(db_engine)
     except Exception as e:
-        print("Database connection failed. Data not inserted.")
+        logging.error("Database connection failed. Data not inserted.")
