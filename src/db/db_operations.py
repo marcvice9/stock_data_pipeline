@@ -127,73 +127,65 @@ def insert_raw_data_with_cdc(db_engine, raw_df, table_name='raw_data'):
 
 def aggregate_stock_data(db_engine, table_name='agg_stock_data'):
     """
-    Creates an aggregated stock data table with calculated metrics.
+    Recalculates and recreates the aggregated stock data table with calculated metrics.
 
-    This function generates a new table in the database that contains aggregated stock data
-    with additional calculated metrics such as daily returns, average daily price, 
-    rolling averages, and volatilities. The data is derived from the `raw_data` table.
+    This function drops the existing `agg_stock_data` table (if it exists) and recreates it
+    with recalculated metrics for all rows in the `raw_data` table.
 
     Args:
         db_engine (sqlalchemy.engine.Engine): The SQLAlchemy database engine object.
         table_name (str): The name of the table to be created in the database. Defaults to 'agg_stock_data'.
-
-    The function performs the following steps:
-        1. Calculates daily returns and average daily price for each stock ticker.
-        2. Computes rolling averages and volatilities for daily returns and prices over 7-day and 10-day windows.
-        3. Creates a new table in the database with the aggregated data and calculated metrics.
-
-    The resulting table includes the following columns:
-        - curr_timestamp: The timestamp when the data was processed.
-        - date: The date of the stock data.
-        - ticker: The stock ticker symbol.
-        - avg_daily_price: The average daily price of the stock.
-        - daily_return: The daily return of the stock.
-        - avg_return_7d: The 7-day rolling average of daily returns.
-        - avg_return_10d: The 10-day rolling average of daily returns.
-        - price_volatility_7d: The 7-day rolling standard deviation of average daily prices.
-        - return_volatility_7d: The 7-day rolling standard deviation of daily returns.
-        - return_volatility_10d: The 10-day rolling standard deviation of daily returns.
     """
+    try:
+        with db_engine.connect() as conn:
+            # Drop the existing table if it exists
+            print(f"Checking if table '{table_name}' exists...")
+            inspector = inspect(db_engine)
+            if table_name in inspector.get_table_names():
+                print(f"Table '{table_name}' exists. Dropping it...")
+                conn.execute(text(f"DROP TABLE IF EXISTS {table_name}"))
+                print(f"Table '{table_name}' has been dropped.")
 
-    agg_query_str = f"""
-        CREATE TABLE {table_name} AS
-        WITH with_returns AS (
-            SELECT
-                *,
-                (close - LAG(close) OVER (PARTITION BY ticker ORDER BY date)) / LAG(close) OVER (PARTITION BY ticker ORDER BY date) AS daily_return,
-                (open + high + low + close) / 4 AS avg_daily_price
-            FROM raw_data rd
-        ),
-        rolling_metrics AS (
-            SELECT *,
-                AVG(daily_return) OVER (PARTITION BY ticker ORDER BY date ROWS BETWEEN 6 PRECEDING AND CURRENT ROW) AS avg_return_7d,
-                AVG(daily_return) OVER (PARTITION BY ticker ORDER BY date ROWS BETWEEN 9 PRECEDING AND CURRENT ROW) AS avg_return_10d,
-                STDDEV(avg_daily_price) OVER (PARTITION BY ticker ORDER BY date ROWS BETWEEN 6 PRECEDING AND CURRENT ROW) AS price_volatility_7d,
-                STDDEV(daily_return) OVER (PARTITION BY ticker ORDER BY date ROWS BETWEEN 6 PRECEDING AND CURRENT ROW) AS return_volatility_7d,
-                STDDEV(daily_return) OVER (PARTITION BY ticker ORDER BY date ROWS BETWEEN 9 PRECEDING AND CURRENT ROW) AS return_volatility_10d
-            FROM with_returns
-        )
-        SELECT
-            curr_timestamp,
-            date::DATE AS date,
-            ticker,
-            avg_daily_price,
-            daily_return,
-            avg_return_7d,
-            avg_return_10d,
-            price_volatility_7d,
-            return_volatility_7d,
-            return_volatility_10d
-        FROM rolling_metrics
-        ORDER BY ticker, date DESC;
-    """
+            # Recreate the table with recalculated metrics
+            print(f"Recreating table '{table_name}' with recalculated metrics...")
+            agg_query_str = f"""
+                CREATE TABLE {table_name} AS
+                WITH with_returns AS (
+                    SELECT
+                        *,
+                        (close - LAG(close) OVER (PARTITION BY ticker ORDER BY date)) / LAG(close) OVER (PARTITION BY ticker ORDER BY date) AS daily_return,
+                        (open + high + low + close) / 4 AS avg_daily_price
+                    FROM raw_data rd
+                ),
+                rolling_metrics AS (
+                    SELECT *,
+                        AVG(daily_return) OVER (PARTITION BY ticker ORDER BY date ROWS BETWEEN 6 PRECEDING AND CURRENT ROW) AS avg_return_7d,
+                        AVG(daily_return) OVER (PARTITION BY ticker ORDER BY date ROWS BETWEEN 9 PRECEDING AND CURRENT ROW) AS avg_return_10d,
+                        STDDEV(avg_daily_price) OVER (PARTITION BY ticker ORDER BY date ROWS BETWEEN 6 PRECEDING AND CURRENT ROW) AS price_volatility_7d,
+                        STDDEV(daily_return) OVER (PARTITION BY ticker ORDER BY date ROWS BETWEEN 6 PRECEDING AND CURRENT ROW) AS return_volatility_7d,
+                        STDDEV(daily_return) OVER (PARTITION BY ticker ORDER BY date ROWS BETWEEN 9 PRECEDING AND CURRENT ROW) AS return_volatility_10d
+                    FROM with_returns
+                )
+                SELECT
+                    curr_timestamp,
+                    date::DATE AS date,
+                    ticker,
+                    avg_daily_price,
+                    daily_return,
+                    avg_return_7d,
+                    avg_return_10d,
+                    price_volatility_7d,
+                    return_volatility_7d,
+                    return_volatility_10d
+                FROM rolling_metrics
+                ORDER BY ticker, date DESC;
+            """
+            conn.execute(text(agg_query_str))
+            conn.commit()
+            print(f"Table '{table_name}' has been recreated successfully with recalculated metrics.")
 
-    # Execute the query and create the table
-    with db_engine.connect() as conn:
-        conn.execute(text(agg_query_str))
-        conn.commit()
-
-    print(f"Table {table_name} has been created successfully.")
+    except Exception as e:
+        print(f"Error during aggregation: {e}")
 
 
 if __name__ == "__main__":
