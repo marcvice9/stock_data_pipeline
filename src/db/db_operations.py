@@ -115,6 +115,7 @@ def insert_raw_data_with_cdc(db_engine, raw_df, table_name='raw_data'):
                     {table_name}.volume <> EXCLUDED.volume;
                 """)
                 conn.execute(merge_query)
+                conn.commit()
                 print(f"Data merged into main table: {table_name}")
 
                 # Step 4: Drop the staging table
