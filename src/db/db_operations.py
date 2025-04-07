@@ -94,6 +94,7 @@ def insert_raw_data_with_cdc(db_engine, raw_df, table_name='raw_data'):
                 ADD CONSTRAINT unique_date_ticker UNIQUE (date, ticker);
                 """)
                 conn.execute(text(pk_query))
+                conn.commit()
                 logging.info(f"Unique constraint added to main table: {table_name}")
 
             else:
@@ -125,9 +126,13 @@ def insert_raw_data_with_cdc(db_engine, raw_df, table_name='raw_data'):
                     {table_name}.close <> EXCLUDED.close OR
                     {table_name}.volume <> EXCLUDED.volume;
                 """)
-                conn.execute(merge_query)
-                conn.commit()
-                logging.info(f"Data merged into main table: {table_name}")
+                try:
+                    conn.execute(merge_query)
+                    conn.commit()
+                    logging.info(f"Data merged into main table: {table_name}")
+                except Exception as e:
+                    logging.error(f"Error during merge operation: {e}")
+                    raise Exception("Merge operation failed. Exiting...") from e
 
                 # Step 4: Drop the staging table
                 logging.info(f"Dropping staging table: {staging_table_name}")
