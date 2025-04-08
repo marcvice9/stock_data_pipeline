@@ -58,8 +58,9 @@ Ensure PostgreSQL is running locally.
 
 Create a database using the credentials specified in the .env file:
 ```bash
-psql -U postgres -c "CREATE DATABASE postgres;"
+psql -U postgres -c "CREATE DATABASE stock_db;"
 ```
+Once created, make sure that the new database connection is succesfully set up in your DBMS of your choice, in my case I used DBeaver.
 
 ## How to Trigger the Data Pipeline Manually
 
